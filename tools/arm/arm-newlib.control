@@ -1,0 +1,8 @@
+Package: arm-newlib-tinyos
+Version: @version@
+Architecture: @architecture@
+Depends: arm-binutils-tinyos, arm-gcc-tinyos
+Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
+Priority: optional
+Section: devel
+Description: TinyOS-specific ARM newlib
