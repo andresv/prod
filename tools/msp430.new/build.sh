@@ -8,6 +8,13 @@ GCC=gcc-${GCC_VER}
 MSPGCC_VER=20110716
 MSPGCC=mspgcc-${MSPGCC_VER}
 
+MPFR_VER=2.4.2
+MPFR=mpfr-${MPFR_VER}
+GMP_VER=4.3.2
+GMP=gmp-${GMP_VER}
+MPC_VER=0.8.1
+MPC=mpc-${MPC_VER}
+
 ARCH_TYPE=$(dpkg-architecture -qDEB_HOST_ARCH)
 if [[ "$1" == deb ]]
 then
@@ -21,8 +28,16 @@ download()
 {
     [[ -a ${BINUTILS}.tar.gz ]] \
 	|| wget http://ftp.gnu.org/gnu/binutils/${BINUTILS}.tar.gz
-    [[ -a gcc-core-${GCC_VER}.tar.gz ]] \
-	|| wget http://ftp.gnu.org/gnu/gcc/gcc-${GCC_VER}/gcc-core-${GCC_VER}.tar.gz
+    [[ -a ${GCC_CORE}.tar.gz ]] \
+	|| wget http://ftp.gnu.org/gnu/gcc/${GCC}/${GCC_CORE}.tar.gz
+
+    [[ -a ${MPFR}.tar.gz ]] \
+	|| wget http://www.mpfr.org/${MPFR}/${MPFR}.tar.gz
+    [[ -a ${GMP}.tar.gz ]] \
+	|| wget http://ftp.gnu.org/gnu/gmp/${GMP}.tar.gz
+    [[ -a ${MPC}.tar.gz ]] \
+	|| wget http://www.multiprecision.org/mpc/download/${MPC}.tar.gz
+
     [[ -a ${MSPGCC}.tar.bz2 ]] \
 	|| wget http://sourceforge.net/projects/mspgcc/files/mspgcc/${MSPGCC}.tar.bz2
     # We need to unpack this in order to find what libc to download
@@ -80,9 +95,25 @@ build_gcc()
     echo Unpacking ${GCC_CORE}.tar.gz
     rm -rf ${GCC}
     tar -xzf ${GCC_CORE}.tar.gz
+
+    echo Unpacking ${MPFR}.tar.gz
+    rm -rf ${MPFR}
+    tar -xzf ${MPFR}.tar.gz
+
+    echo Unpacking ${GMP}.tar.gz
+    rm -rf ${GMP}
+    tar -xzf ${GMP}.tar.gz
+
+    echo Unpacking ${MPC}.tar.gz
+    rm -rf ${MPC}
+    tar -xzf ${MPC}.tar.gz
+
     set -e
     (
     	cd $GCC
+	ln -s ../${MPFR} mpfr
+	ln -s ../${GMP} gmp
+	ln -s ../${MPC} mpc
     	cat ../${MSPGCC}/msp430-gcc-${GCC_VER}-*.patch | patch -p1
 	mkdir build
 	cd build
