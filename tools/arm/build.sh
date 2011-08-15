@@ -71,10 +71,25 @@ build_gcc()
     rm -rf gcc-*-${CS_BASE}
     tar -xjf ${LOCAL_BASE}/gcc-*.tar.bz2
     
+    echo Unpacking ${LOCAL_BASE}/mpfr-*.tar.bz2
+    rm -rf mpfr-${CS_BASE}
+    tar -xjf ${LOCAL_BASE}/mpfr-*.tar.bz2
+
+    echo Unpacking ${LOCAL_BASE}/gmp-*.tar.bz2
+    rm -rf gmp-${CS_BASE}
+    tar -xjf ${LOCAL_BASE}/gmp-*.tar.bz2
+
+    echo Unpacking ${LOCAL_BASE}/mpc-*.tar.bz2
+    rm -rf mpc-?.?.?
+    tar -xjf ${LOCAL_BASE}/mpc-*.tar.bz2
+
     set -e
     (
     	PATH=${PREFIX}/bin:${PATH}
     	cd gcc-*-${CS_BASE}
+	ln -s ../mpfr-${CS_BASE} mpfr
+	ln -s ../gmp-${CS_BASE} gmp
+	ln -s ../mpc-?.?.? mpc
 	mkdir build
 	cd build
     	../configure \
@@ -184,6 +199,18 @@ build_gcc_again()
     echo Unpacking ${LOCAL_BASE}/gcc-*.tar.bz2
     rm -rf gcc-*-${CS_BASE}
     tar -xjf ${LOCAL_BASE}/gcc-*.tar.bz2
+
+    echo Unpacking ${LOCAL_BASE}/mpfr-*.tar.bz2
+    rm -rf mpfr-${CS_BASE}
+    tar -xjf ${LOCAL_BASE}/mpfr-*.tar.bz2
+
+    echo Unpacking ${LOCAL_BASE}/gmp-*.tar.bz2
+    rm -rf gmp-${CS_BASE}
+    tar -xjf ${LOCAL_BASE}/gmp-*.tar.bz2
+
+    echo Unpacking ${LOCAL_BASE}/mpc-*.tar.bz2
+    rm -rf mpc-?.?.?
+    tar -xjf ${LOCAL_BASE}/mpc-*.tar.bz2
     
     cp -r ${PREFIX}/arm-none-eabi/include ${PREFIX}/arm-none-eabi/sys-include
 
@@ -191,6 +218,9 @@ build_gcc_again()
     (
     	PATH=${PREFIX}/bin:${PATH}
     	cd gcc-*-${CS_BASE}
+	ln -s ../mpfr-${CS_BASE} mpfr
+	ln -s ../gmp-${CS_BASE} gmp
+	ln -s ../mpc-?.?.? mpc
 	mkdir build
 	cd build
     	../configure \
@@ -265,11 +295,11 @@ case $1 in
 	;;
 
     clean)
-	remove *-${CS_BASE} *.files debian
+	remove *-${CS_BASE} mpc-?.?.? *.files debian
 	;;
 
     veryclean)
-	remove *-${CS_BASE}{,.tar.bz2} *.files debian
+	remove *-${CS_BASE}{,.tar.bz2} mpc-?.?.? *.files debian
 	;;
 
     deb)
