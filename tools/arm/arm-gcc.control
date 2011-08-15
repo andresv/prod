@@ -1,7 +1,7 @@
 Package: arm-gcc-tinyos
 Version: @version@
 Architecture: @architecture@
-Depends: arm-binutils-tinyos, libgmp3c2, libmpfr4 | libmpfr1ldbl, libmpc2
+Depends: arm-binutils-tinyos
 Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
 Priority: optional
 Section: devel
