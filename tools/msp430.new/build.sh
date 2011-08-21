@@ -8,6 +8,16 @@ GCC=gcc-${GCC_VER}
 MSPGCC_VER=20110716
 MSPGCC=mspgcc-${MSPGCC_VER}
 
+PATCHES="
+  msp430-binutils-2.21.1-20110716-sf3143071.patch
+  msp430-binutils-2.21.1-20110716-sf3379341.patch
+  msp430-binutils-2.21.1-20110716-sf3386145.patch
+  msp430-gcc-4.5.3-20110706-sf3370978.patch
+  msp430-gcc-4.5.3-20110706-sf3390964.patch
+  msp430-libc-20110612-sf3387164.patch
+  msp430mcu-20110613-sf3379189.patch
+  msp430mcu-20110613-sf3384550.patch"
+
 MPFR_VER=2.4.2
 MPFR=mpfr-${MPFR_VER}
 GMP_VER=4.3.2
@@ -51,6 +61,13 @@ download()
     MSP430LIBC=msp430-libc-${MSP430LIBC_VER}
     [[ -a ${MSP430LIBC}.tar.bz2 ]] \
 	|| wget http://sourceforge.net/projects/mspgcc/files/msp430-libc/${MSP430LIBC}.tar.bz2
+
+    # Download some patches to the MSP430 LTS release
+    for f in ${PATCHES}
+    do
+	[[ -a ${f} ]] \
+	    || wget http://sourceforge.net/projects/mspgcc/files/Patches/LTS/20110716/${f}
+    done
 }
 
 build_binutils()
@@ -62,6 +79,8 @@ build_binutils()
     (
 	cd ${BINUTILS}
 	cat ../${MSPGCC}/msp430-binutils-${BINUTILS_VER}-*.patch | patch -p1
+	echo Extra patches...
+	cat ../msp430-binutils-*.patch | patch -p1
 	../${BINUTILS}/configure \
 	    --prefix=${PREFIX} \
 	    --target=msp430
@@ -115,6 +134,8 @@ build_gcc()
 	ln -s ../${GMP} gmp
 	ln -s ../${MPC} mpc
     	cat ../${MSPGCC}/msp430-gcc-${GCC_VER}-*.patch | patch -p1
+	echo Extra patches...
+	cat ../msp430-gcc-*.patch | patch -p1
 	mkdir build
 	cd build
     	../configure \
@@ -159,6 +180,8 @@ build_mcu()
     set -e
     (
 	cd ${MSP430MCU}
+	echo Extra patches...
+	cat ../msp430mcu-*.patch | patch -p1
 	MSP430MCU_ROOT=$(pwd) scripts/install.sh ${PREFIX}
     )
     ( cd $PREFIX ; find . -type f ) > msp430mcu.files
@@ -197,7 +220,10 @@ build_libc()
     set -e
     (
 	PATH=${PREFIX}/bin:${PATH}
-	cd ${MSP430LIBC}/src
+	cd ${MSP430LIBC}
+	echo Extra patches...
+	cat ../msp430-libc-*.patch | patch -p1
+	cd src
 	make PREFIX=${PREFIX} -j4
 	make PREFIX=${PREFIX} install
     )
@@ -228,6 +254,21 @@ package_libc()
     )
 }
 
+package_dummy()
+{
+    set -e
+    (
+	mkdir -p tinyos
+	cd tinyos
+	mkdir -p debian/DEBIAN
+	cat ../msp430-tinyos.control \
+	    | sed 's/@version@/'$(date +%Y%m%d)'/' \
+	    > debian/DEBIAN/control
+	dpkg-deb --build debian \
+	    ${PACKAGES_DIR/${ARCH_TYPE}/all}/msp430-tinyos.deb
+    )
+}
+
 remove()
 {
     for f in $@
@@ -250,11 +291,11 @@ case $1 in
 	MSP430MCU=msp430mcu-${MSP430MCU_VER}
 	MSP430LIBC_VER=$(cat ${MSPGCC}/msp430-libc.version)
 	MSP430LIBC=msp430-libc-${MSP430LIBC_VER}
-	remove ${BINUTILS} ${GCC} ${MSPGCC} ${MSP430MCU} ${MSP430LIBC} gcc *.files debian
+	remove ${BINUTILS} ${GCC} ${MSPGCC} ${MSP430MCU} ${MSP430LIBC} tinyos gcc *.files debian
 	;;
 
     veryclean)
-	remove {${BINUTILS},${GCC},${GCC_CORE}}{,.tar.gz} gcc *.files debian
+	remove {${BINUTILS},${GCC},${GCC_CORE}}{,.tar.gz} tinyos gcc *.files debian
 	remove {${MSPGCC},msp430-libc-*,msp430mcu-*}{,.tar.bz2}
 	;;
 
@@ -268,6 +309,7 @@ case $1 in
         package_mcu
 	build_libc
 	package_libc
+	package_dummy
 	;;
 
     *)
