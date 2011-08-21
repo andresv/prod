@@ -66,7 +66,8 @@ download()
     for f in ${PATCHES}
     do
 	[[ -a ${f} ]] \
-	    || wget http://sourceforge.net/projects/mspgcc/files/Patches/LTS/20110716/${f}
+	    || (echo Dowloading ${f}...
+	    wget -q http://sourceforge.net/projects/mspgcc/files/Patches/LTS/20110716/${f})
     done
 }
 
@@ -287,16 +288,14 @@ case $1 in
 	;;
 
     clean)
-	MSP430MCU_VER=$(cat ${MSPGCC}/msp430mcu.version)
-	MSP430MCU=msp430mcu-${MSP430MCU_VER}
-	MSP430LIBC_VER=$(cat ${MSPGCC}/msp430-libc.version)
-	MSP430LIBC=msp430-libc-${MSP430LIBC_VER}
-	remove ${BINUTILS} ${GCC} ${MSPGCC} ${MSP430MCU} ${MSP430LIBC} tinyos gcc *.files debian
+	remove $(echo binutils-* gcc-* mspgcc-* msp430-libc-2011* msp430mcu-* mpfr-* gmp-* mpc-* \
+	    | fmt -1 | grep -v 'tar' | grep -v 'patch' | xargs)
+	remove tinyos *.files debian
 	;;
 
     veryclean)
-	remove {${BINUTILS},${GCC},${GCC_CORE}}{,.tar.gz} tinyos gcc *.files debian
-	remove {${MSPGCC},msp430-libc-*,msp430mcu-*}{,.tar.bz2}
+	remove binutils-* gcc-* mspgcc-* msp430-libc-2011* msp430mcu-* mpfr-* gmp-* mpc-*
+	remove tinyos *.patch *.files debian
 	;;
 
     deb)
