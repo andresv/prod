@@ -174,6 +174,21 @@ package_libc()
     )
 }
 
+package_dummy()
+{
+    set -e
+    (
+	mkdir -p tinyos
+	cd tinyos
+	mkdir -p debian/DEBIAN
+	cat ../avr-tinyos.control \
+	    | sed 's/@version@/'$(date +%Y%m%d)'/' \
+	    > debian/DEBIAN/control
+	dpkg-deb --build debian \
+	    ${PACKAGES_DIR/${ARCH_TYPE}/all}/avr-tinyos.deb
+    )
+}
+
 remove()
 {
     for f in $@
@@ -192,11 +207,11 @@ case $1 in
 	;;
 
     clean)
-	remove ${BINUTILS} ${GCC} ${AVRLIBC} *.files debian
+	remove ${BINUTILS} ${GCC} ${AVRLIBC} tinyos *.files debian
 	;;
 
     veryclean)
-	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2} *.files debian
+	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2} tinyos *.files debian
 	;;
 
     deb)
@@ -207,6 +222,7 @@ case $1 in
 	package_gcc
 	build_libc
 	package_libc
+	package_dummy
 	;;
 
     *)
