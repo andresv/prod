@@ -43,8 +43,8 @@ fi
 
 download()
 {
-    [[ -a ${BINUTILS}.tar.gz ]] \
-	|| wget http://ftp.gnu.org/gnu/binutils/${BINUTILS}.tar.gz
+    [[ -a ${BINUTILS}a.tar.bz2 ]] \
+	|| wget http://ftp.gnu.org/gnu/binutils/${BINUTILS}a.tar.bz2
     [[ -a ${GCC_CORE}.tar.gz ]] \
 	|| wget http://ftp.gnu.org/gnu/gcc/${GCC}/${GCC_CORE}.tar.gz
     [[ -a ${GDB}a.tar.gz ]] \
@@ -86,9 +86,9 @@ download()
 
 build_binutils()
 {
-    echo Unpacking ${BINUTILS}.tar.gz
+    echo Unpacking ${BINUTILS}a.tar.bz2
     rm -rf ${BINUTILS}
-    tar -xzf ${BINUTILS}.tar.gz
+    tar -xjf ${BINUTILS}a.tar.bz2
     set -e
     (
 	cd ${BINUTILS}
