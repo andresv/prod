@@ -7,6 +7,8 @@ GCC_CORE=gcc-core-${GCC_VER}
 GCC=gcc-${GCC_VER}
 GDB_VER=7.2
 GDB=gdb-${GDB_VER}
+MSPDEBUG_VER=0.16
+MSPDEBUG=mspdebug-${MSPDEBUG_VER}
 
 MSPGCC_VER=20110716
 MSPGCC=mspgcc-${MSPGCC_VER}
@@ -45,6 +47,10 @@ download()
 	|| wget http://ftp.gnu.org/gnu/gcc/${GCC}/${GCC_CORE}.tar.gz
     [[ -a ${GDB}a.tar.gz ]] \
 	|| wget http://ftp.gnu.org/gnu/gdb/${GDB}a.tar.gz
+    [[ -a ${GDB}a.tar.gz ]] \
+	|| wget http://ftp.gnu.org/gnu/gdb/${GDB}a.tar.gz
+    [[ -a ${MSPDEBUG}.tar.gz ]] \
+	|| wget http://sourceforge.net/projects/mspdebug/files/${MSPDEBUG}.tar.gz
 
     [[ -a ${MPFR}.tar.gz ]] \
 	|| wget http://www.mpfr.org/${MPFR}/${MPFR}.tar.gz
@@ -233,7 +239,7 @@ build_libc()
 	make PREFIX=${PREFIX} -j4
 	make PREFIX=${PREFIX} install
     )
-    ( cd $PREFIX ; find . -type f ) > msp430-gcc.files
+    ( cd $PREFIX ; find . -type f ) > msp430-libc.files
 }
 
 package_libc()
@@ -280,6 +286,7 @@ build_gdb()
 	rm -rf ${PREFIX}{/lib/libiberty.a,/share/info,/share/locale,/share/gdb/syscalls}
 	find ${PREFIX} -empty | xargs rm -rf
     )
+    ( cd $PREFIX ; find . -type f ) > msp430-gdb.files
 }
 
 package_gdb()
@@ -296,11 +303,46 @@ package_gdb()
 	rsync -a ../debian/usr debian
 	(
 	    cd debian/usr
-	    cat ../../../msp430-gcc.files | xargs rm -rf
+	    cat ../../../msp430-libc.files | xargs rm -rf
 	    find . -empty | xargs rm -rf
 	)
 	dpkg-deb --build debian \
 	    ${PACKAGES_DIR}/msp430-gdb-${VER}.deb
+    )
+}
+
+build_mspdebug()
+{
+    echo Unpacking ${MSPDEBUG}.tar.gz
+    rm -rf ${MSPDEBUG}
+    tar xzf ${MSPDEBUG}.tar.gz
+    set -e
+    (
+	cd ${MSPDEBUG}
+	make -j4
+	make install PREFIX=${PREFIX}
+    )
+}
+
+package_mspdebug()
+{
+    set -e
+    (
+	VER=${MSPDEBUG_VER}
+	cd ${MSPDEBUG}
+	mkdir -p debian/DEBIAN
+	cat ../mspdebug.control \
+	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
+	    > debian/DEBIAN/control
+	rsync -a ../debian/usr debian
+	(
+	    cd debian/usr
+	    cat ../../../msp430-gdb.files | xargs rm -rf
+	    find . -empty | xargs rm -rf
+	)
+	dpkg-deb --build debian \
+	    ${PACKAGES_DIR}/mspdebug-${VER}.deb
     )
 }
 
@@ -337,15 +379,15 @@ case $1 in
 	;;
 
     clean)
-	remove $(echo binutils-* gcc-* gdb-* mspgcc-* msp430-libc-2011* \
-	    msp430mcu-* mpfr-* gmp-* mpc-* \
+	remove $(echo binutils-* gcc-* gdb-* mspdebug-* mspgcc-* \
+	    msp430-libc-2011* msp430mcu-* mpfr-* gmp-* mpc-* \
 	    | fmt -1 | grep -v 'tar' | grep -v 'patch' | xargs)
 	remove tinyos *.files debian
 	;;
 
     veryclean)
-	remove binutils-* gcc-* gdb-* mspgcc-* msp430-libc-2011* msp430mcu-* \
-	    mpfr-* gmp-* mpc-*
+	remove binutils-* gcc-* gdb-* mspdebug-* mspgcc-* msp430-libc-2011* \
+	    msp430mcu-* mpfr-* gmp-* mpc-*
 	remove tinyos *.patch *.files debian
 	;;
 
@@ -361,6 +403,8 @@ case $1 in
 	package_libc
 	build_gdb
 	package_gdb
+	build_mspdebug
+	package_mspdebug
 	package_dummy
 	;;
 
@@ -371,5 +415,6 @@ case $1 in
 	build_gcc
 	build_libc
 	build_gdb
+	build_mspdebug
 	;;
 esac

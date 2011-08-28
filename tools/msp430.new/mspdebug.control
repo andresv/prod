@@ -1,8 +1,8 @@
-Package: msp430-gdb-tinyos
+Package: mspdebug-tinyos
 Version: @version@
 Architecture: @architecture@
-Depends: libncurses5
+Depends: libncurses5, libusb-0.1-4
 Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
 Priority: optional
 Section: devel
-Description: TinyOS-specific MSP430 gdb
+Description: TinyOS-specific MSPDebug
