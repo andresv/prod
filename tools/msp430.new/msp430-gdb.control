@@ -1,0 +1,8 @@
+Package: msp430-gdb-tinyos
+Version: @version@
+Architecture: @architecture@
+Depends: libncurses5
+Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
+Priority: optional
+Section: devel
+Description: TinyOS-specific MSP430 gcc
