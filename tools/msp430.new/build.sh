@@ -19,6 +19,8 @@ PATCHES="
   msp430-binutils-2.21.1-20110716-sf3386145.patch
   msp430-gcc-4.5.3-20110706-sf3370978.patch
   msp430-gcc-4.5.3-20110706-sf3390964.patch
+  msp430-gcc-4.5.3-20110706-sf3394176.patch
+  msp430-gcc-4.5.3-20110706-sf3396639.patch
   msp430-libc-20110612-sf3387164.patch
   msp430mcu-20110613-sf3379189.patch
   msp430mcu-20110613-sf3384550.patch"
