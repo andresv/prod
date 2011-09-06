@@ -42,6 +42,7 @@ then
     PREFIX=$(pwd)/debian/usr
     PACKAGES_DIR=$(pwd)/../../../../packages/${ARCH_TYPE}
     mkdir -p ${PACKAGES_DIR}
+    mkdir -p ${PACKAGES_DIR/${ARCH_TYPE}/all}
 fi
 : ${PREFIX:=$(pwd)/../../../../local}
 

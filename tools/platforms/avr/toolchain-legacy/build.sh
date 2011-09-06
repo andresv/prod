@@ -14,6 +14,7 @@ then
     PREFIX=$(pwd)/debian/usr
     PACKAGES_DIR=$(pwd)/../../../../packages/${ARCH_TYPE}
     mkdir -p ${PACKAGES_DIR}
+    mkdir -p ${PACKAGES_DIR/${ARCH_TYPE}/all}
 fi
 : ${PREFIX:=$(pwd)/../../../../local}
 
@@ -215,7 +216,8 @@ case $1 in
 	;;
 
     veryclean)
-	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2,a.tar.bz2} tinyos *.files debian
+	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2,a.tar.bz2}
+	remove tinyos *.files debian
 	;;
 
     deb)
