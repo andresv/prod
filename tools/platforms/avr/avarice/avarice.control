@@ -1,7 +1,8 @@
-Package: avr-binutils-tinyos
+Package: avarice-tinyos
 Version: @version@
 Architecture: @architecture@
+Depends: libc6, libusb-0.1-4, binutils, zlib1g, libgcc1
 Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
 Priority: optional
 Section: devel
-Description: TinyOS-specific AVR binutils
+Description: TinyOS-specific AVaRICE

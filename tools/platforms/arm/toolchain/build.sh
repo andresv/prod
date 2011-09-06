@@ -13,10 +13,10 @@ ARCH_TYPE=$(dpkg-architecture -qDEB_HOST_ARCH)
 if [[ "$1" == deb ]]
 then
     PREFIX=$(pwd)/debian/usr
-    PACKAGES_DIR=$(pwd)/../../packages/${ARCH_TYPE}
+    PACKAGES_DIR=$(pwd)/../../../../packages/${ARCH_TYPE}
     mkdir -p ${PACKAGES_DIR}
 fi
-: ${PREFIX:=$(pwd)/../../local}
+: ${PREFIX:=$(pwd)/../../../../local}
 
 BINUTILS=binutils-${CS_BASE}
 

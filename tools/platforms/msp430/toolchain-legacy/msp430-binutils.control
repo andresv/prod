@@ -1,8 +1,8 @@
-Package: avr-gcc-tinyos
+Package: msp430-binutils-tinyos-legacy
 Version: @version@
 Architecture: @architecture@
-Depends: avr-binutils-tinyos
+Depends: libc6
 Maintainer: Razvan Musaloiu-E. <razvanm@musaloiu.com>
 Priority: optional
 Section: devel
-Description: TinyOS-specific AVR gcc
+Description: TinyOS-specific MSP430 binutils

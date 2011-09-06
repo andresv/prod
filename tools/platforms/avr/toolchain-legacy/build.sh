@@ -8,22 +8,19 @@ GCC=gcc-${GCC_VER}
 AVRLIBC_VER=1.4.7
 AVRLIBC=avr-libc-${AVRLIBC_VER}
 
-AVRDUDE_VER=5.4
-AVRDUDE=avrdude-${AVRDUDE_VER}
-
 ARCH_TYPE=$(dpkg-architecture -qDEB_HOST_ARCH)
 if [[ "$1" == deb ]]
 then
     PREFIX=$(pwd)/debian/usr
-    PACKAGES_DIR=$(pwd)/../../packages/${ARCH_TYPE}
+    PACKAGES_DIR=$(pwd)/../../../../packages/${ARCH_TYPE}
     mkdir -p ${PACKAGES_DIR}
 fi
-: ${PREFIX:=$(pwd)/../../local}
+: ${PREFIX:=$(pwd)/../../../../local}
 
 download()
 {
-    [[ -a ${BINUTILS}.tar.gz ]] \
-	|| wget http://ftp.gnu.org/gnu/binutils/${BINUTILS}.tar.gz
+    [[ -a ${BINUTILS}a.tar.bz2 ]] \
+	|| wget http://ftp.gnu.org/gnu/binutils/${BINUTILS}a.tar.bz2
     [[ -a ${GCC}.tar.bz2 ]] \
 	|| wget http://ftp.gnu.org/gnu/gcc/gcc-${GCC_VER}/${GCC}.tar.bz2
     [[ -a ${AVRLIBC}.tar.bz2 ]] \
@@ -32,15 +29,16 @@ download()
 
 build_binutils()
 {
-    echo Unpacking ${BINUTILS}.tar.gz
+    echo Unpacking ${BINUTILS}a.tar.bz2
     rm -rf ${BINUTILS}
-    tar -xzf ${BINUTILS}.tar.gz
+    tar -xjf ${BINUTILS}a.tar.bz2
     set -e
     (
 	cd ${BINUTILS}
 	patch -p0 < ../avr-binutils.patch
 	./configure \
 	    --prefix=${PREFIX} \
+	    --mandir=${PREFIX}/share/man \
 	    --target=avr \
 	    --program-prefix=avr- \
 	    --disable-nls \
@@ -66,7 +64,7 @@ package_binutils()
 	    > debian/DEBIAN/control
 	rsync -a ../debian/usr debian
 	dpkg-deb --build debian \
-	    ${PACKAGES_DIR}/avr-binutils-${VER}.deb
+	    ${PACKAGES_DIR}/avr-binutils-tinyos-legacy-${VER}.deb
     )
 }
 
@@ -112,10 +110,13 @@ package_gcc()
 	(
 	    cd debian/usr
 	    cat ../../../avr-binutils.files | xargs rm -rf
-	    find . -empty | xargs rm -rf
+	    until $(find . -empty)
+	    do
+		find . -empty | xargs rm -rf
+	    done
 	)
 	dpkg-deb --build debian \
-	    ${PACKAGES_DIR}/avr-gcc-${VER}.deb
+	    ${PACKAGES_DIR}/avr-gcc-tinyos-legacy-${VER}.deb
     )
 }
 
@@ -173,7 +174,22 @@ package_libc()
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	dpkg-deb --build debian \
-	    ${PACKAGES_DIR}/avr-libc-${VER}.deb
+	    ${PACKAGES_DIR}/avr-libc-tinyos-legacy-${VER}.deb
+    )
+}
+
+package_dummy()
+{
+    set -e
+    (
+	mkdir -p tinyos
+	cd tinyos
+	mkdir -p debian/DEBIAN
+	cat ../avr-tinyos.control \
+	    | sed 's/@version@/'$(date +%Y%m%d)'/' \
+	    > debian/DEBIAN/control
+	dpkg-deb --build debian \
+	    ${PACKAGES_DIR/${ARCH_TYPE}/all}/avr-tinyos-legacy.deb
     )
 }
 
@@ -195,11 +211,11 @@ case $1 in
 	;;
 
     clean)
-	remove ${BINUTILS} ${GCC} ${AVRLIBC} *.files debian
+	remove ${BINUTILS} ${GCC} ${AVRLIBC} tinyos *.files debian
 	;;
 
     veryclean)
-	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2} *.files debian
+	remove {${BINUTILS},${GCC},${AVRLIBC}}{,.tar.gz,.tar.bz2,a.tar.bz2} tinyos *.files debian
 	;;
 
     deb)
@@ -210,6 +226,7 @@ case $1 in
 	package_gcc
 	build_libc
 	package_libc
+	package_dummy
 	;;
 
     *)

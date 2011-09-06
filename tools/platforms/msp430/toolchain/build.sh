@@ -7,8 +7,6 @@ GCC_CORE=gcc-core-${GCC_VER}
 GCC=gcc-${GCC_VER}
 GDB_VER=7.2
 GDB=gdb-${GDB_VER}
-MSPDEBUG_VER=0.16
-MSPDEBUG=mspdebug-${MSPDEBUG_VER}
 
 MSPGCC_VER=20110716
 MSPGCC=mspgcc-${MSPGCC_VER}
@@ -17,13 +15,19 @@ PATCHES="
   msp430-binutils-2.21.1-20110716-sf3143071.patch
   msp430-binutils-2.21.1-20110716-sf3379341.patch
   msp430-binutils-2.21.1-20110716-sf3386145.patch
+  msp430-binutils-2.21.1-20110716-sf3400711.patch
+  msp430-binutils-2.21.1-20110716-sf3400750.patch
   msp430-gcc-4.5.3-20110706-sf3370978.patch
   msp430-gcc-4.5.3-20110706-sf3390964.patch
   msp430-gcc-4.5.3-20110706-sf3394176.patch
   msp430-gcc-4.5.3-20110706-sf3396639.patch
   msp430-libc-20110612-sf3387164.patch
+  msp430-libc-20110612-sf3402836.patch
   msp430mcu-20110613-sf3379189.patch
-  msp430mcu-20110613-sf3384550.patch"
+  msp430mcu-20110613-sf3384550.patch
+  msp430mcu-20110613-sf3400714.patch
+"
+
 
 MPFR_VER=2.4.2
 MPFR=mpfr-${MPFR_VER}
@@ -36,10 +40,20 @@ ARCH_TYPE=$(dpkg-architecture -qDEB_HOST_ARCH)
 if [[ "$1" == deb ]]
 then
     PREFIX=$(pwd)/debian/usr
-    PACKAGES_DIR=$(pwd)/../../packages/${ARCH_TYPE}
+    PACKAGES_DIR=$(pwd)/../../../../packages/${ARCH_TYPE}
     mkdir -p ${PACKAGES_DIR}
 fi
-: ${PREFIX:=$(pwd)/../../local}
+: ${PREFIX:=$(pwd)/../../../../local}
+
+last_patch()
+{
+    # We need to use $@ because the file pattern is already expanded.
+    if echo $@ | grep -v -q '*'
+    then
+	echo -n +
+	ls -l -t --time-style=+%Y%m%d $@ | awk '{ print +$6}' | head -n1
+    fi
+}
 
 download()
 {
@@ -51,8 +65,6 @@ download()
 	|| wget http://ftp.gnu.org/gnu/gdb/${GDB}a.tar.gz
     [[ -a ${GDB}a.tar.gz ]] \
 	|| wget http://ftp.gnu.org/gnu/gdb/${GDB}a.tar.gz
-    [[ -a ${MSPDEBUG}.tar.gz ]] \
-	|| wget http://sourceforge.net/projects/mspdebug/files/${MSPDEBUG}.tar.gz
 
     [[ -a ${MPFR}.tar.gz ]] \
 	|| wget http://www.mpfr.org/${MPFR}/${MPFR}.tar.gz
@@ -78,6 +90,7 @@ download()
     # Download some patches to the MSP430 LTS release
     for f in ${PATCHES}
     do
+	# Note: the last_patch function relies on the wget setting the date right.
 	[[ -a ${f} ]] \
 	    || (echo Dowloading ${f}...
 	    wget -q http://sourceforge.net/projects/mspgcc/files/Patches/LTS/20110716/${f})
@@ -111,10 +124,12 @@ package_binutils()
     set -e
     (
 	VER=${BINUTILS_VER}
+	LAST_PATCH=$(last_patch msp430-binutils-*.patch)
+	DEB_VER=${VER}-LTS${MSPGCC_VER}${LAST_PATCH}-$(date +%Y%m%d)
 	cd ${BINUTILS}
 	mkdir -p debian/DEBIAN
 	cat ../msp430-binutils.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@version@/'${DEB_VER}'/' \
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	rsync -a ../debian/usr debian
@@ -169,10 +184,12 @@ package_gcc()
     set -e
     (
 	VER=${GCC_VER}
+	LAST_PATCH=$(last_patch msp430-gcc-*.patch)
+	DEB_VER=${VER}-LTS${MSPGCC_VER}${LAST_PATCH}-$(date +%Y%m%d)
 	cd ${GCC}
 	mkdir -p debian/DEBIAN
 	cat ../msp430-gcc.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@version@/'${DEB_VER}'/' \
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	rsync -a ../debian/usr debian
@@ -206,6 +223,8 @@ package_mcu()
     set -e
     (
 	VER=${MSP430MCU_VER}
+	LAST_PATCH=$(last_patch msp430mcu-*.patch)
+	DEB_VER=${VER}-LTS${MSPGCC_VER}${LAST_PATCH}-$(date +%Y%m%d)
 	cd ${MSP430MCU}
 	rsync -a -m ../debian/usr debian
 	(
@@ -218,7 +237,7 @@ package_mcu()
 	)
 	mkdir -p debian/DEBIAN
 	cat ../msp430mcu.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@version@/'${DEB_VER}'/' \
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	dpkg-deb --build debian \
@@ -249,6 +268,8 @@ package_libc()
     set -e
     (
 	VER=${MSP430LIBC_VER}
+	LAST_PATCH=$(last_patch msp430-libc-*.patch)
+	DEB_VER=${VER}-LTS${MSPGCC_VER}${LAST_PATCH}-$(date +%Y%m%d)
 	cd ${MSP430LIBC}
 	rsync -a -m ../debian/usr debian
 	(
@@ -261,7 +282,7 @@ package_libc()
 	)
 	mkdir -p debian/DEBIAN
 	cat ../msp430-libc.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@version@/'${DEB_VER}'/' \
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	dpkg-deb --build debian \
@@ -288,7 +309,6 @@ build_gdb()
 	rm -rf ${PREFIX}{/lib/libiberty.a,/share/info,/share/locale,/share/gdb/syscalls}
 	find ${PREFIX} -empty | xargs rm -rf
     )
-    ( cd $PREFIX ; find . -type f ) > msp430-gdb.files
 }
 
 package_gdb()
@@ -296,10 +316,12 @@ package_gdb()
     set -e
     (
 	VER=${GDB_VER}
+	LAST_PATCH=$(last_patch msp430-gdb-*.patch)
+	DEB_VER=${VER}-LTS${MSPGCC_VER}${LAST_PATCH}-$(date +%Y%m%d)
 	cd ${GDB}
 	mkdir -p debian/DEBIAN
 	cat ../msp430-gdb.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
+	    | sed 's/@version@/'${DEB_VER}'/' \
 	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
 	    > debian/DEBIAN/control
 	rsync -a ../debian/usr debian
@@ -310,41 +332,6 @@ package_gdb()
 	)
 	dpkg-deb --build debian \
 	    ${PACKAGES_DIR}/msp430-gdb-${VER}.deb
-    )
-}
-
-build_mspdebug()
-{
-    echo Unpacking ${MSPDEBUG}.tar.gz
-    rm -rf ${MSPDEBUG}
-    tar xzf ${MSPDEBUG}.tar.gz
-    set -e
-    (
-	cd ${MSPDEBUG}
-	make -j4
-	make install PREFIX=${PREFIX}
-    )
-}
-
-package_mspdebug()
-{
-    set -e
-    (
-	VER=${MSPDEBUG_VER}
-	cd ${MSPDEBUG}
-	mkdir -p debian/DEBIAN
-	cat ../mspdebug.control \
-	    | sed 's/@version@/'${VER}-$(date +%Y%m%d)'/' \
-	    | sed 's/@architecture@/'${ARCH_TYPE}'/' \
-	    > debian/DEBIAN/control
-	rsync -a ../debian/usr debian
-	(
-	    cd debian/usr
-	    cat ../../../msp430-gdb.files | xargs rm -rf
-	    find . -empty | xargs rm -rf
-	)
-	dpkg-deb --build debian \
-	    ${PACKAGES_DIR}/mspdebug-${VER}.deb
     )
 }
 
@@ -381,14 +368,14 @@ case $1 in
 	;;
 
     clean)
-	remove $(echo binutils-* gcc-* gdb-* mspdebug-* mspgcc-* \
-	    msp430-libc-2011* msp430mcu-* mpfr-* gmp-* mpc-* \
+	remove $(echo binutils-* gcc-* gdb-* mspgcc-* msp430-libc-2011* \
+	    msp430mcu-* mpfr-* gmp-* mpc-* \
 	    | fmt -1 | grep -v 'tar' | grep -v 'patch' | xargs)
 	remove tinyos *.files debian
 	;;
 
     veryclean)
-	remove binutils-* gcc-* gdb-* mspdebug-* mspgcc-* msp430-libc-2011* \
+	remove binutils-* gcc-* gdb-* mspgcc-* msp430-libc-2011* \
 	    msp430mcu-* mpfr-* gmp-* mpc-*
 	remove tinyos *.patch *.files debian
 	;;
@@ -405,8 +392,6 @@ case $1 in
 	package_libc
 	build_gdb
 	package_gdb
-	build_mspdebug
-	package_mspdebug
 	package_dummy
 	;;
 
@@ -417,6 +402,5 @@ case $1 in
 	build_gcc
 	build_libc
 	build_gdb
-	build_mspdebug
 	;;
 esac
