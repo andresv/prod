@@ -179,10 +179,8 @@ package_newlib()
 	(
 	    cd debian/usr
 	    cat ../../../arm-gcc.files | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	mkdir -p debian/DEBIAN
 	cat ../arm-newlib.control \
@@ -266,10 +264,8 @@ package_gcc_again()
 	    cat ../../../arm-binutils.files | xargs rm -rf
 	    diff ../../../arm-newlib.files ../../../arm-gcc.files \
 		| grep '< ' | cut -d ' ' -f 2 | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	dpkg-deb --build debian \
 	    ${PACKAGES_DIR}/arm-gcc-${VER}.deb

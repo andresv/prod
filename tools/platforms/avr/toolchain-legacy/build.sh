@@ -111,10 +111,8 @@ package_gcc()
 	(
 	    cd debian/usr
 	    cat ../../../avr-binutils.files | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	dpkg-deb --build debian \
 	    ${PACKAGES_DIR}/avr-gcc-tinyos-legacy-${VER}.deb
@@ -164,10 +162,8 @@ package_libc()
 	(
 	    cd debian/usr
 	    cat ../../../avr-gcc.files | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	mkdir -p debian/DEBIAN
 	cat ../avr-libc.control \

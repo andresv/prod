@@ -231,10 +231,8 @@ package_mcu()
 	(
 	    cd debian/usr
 	    cat ../../../msp430-gcc.files | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	mkdir -p debian/DEBIAN
 	cat ../msp430mcu.control \
@@ -276,10 +274,8 @@ package_libc()
 	(
 	    cd debian/usr
 	    cat ../../../msp430mcu.files | xargs rm -rf
-	    until $(find . -empty)
-	    do
-		find . -empty | xargs rm -rf
-	    done
+	    until find . -empty -exec rm -rf {} \; &> /dev/null
+	    do : ; done
 	)
 	mkdir -p debian/DEBIAN
 	cat ../msp430-libc.control \
