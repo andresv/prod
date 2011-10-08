@@ -22,6 +22,7 @@ PATCHES="
   msp430-gcc-4.5.3-20110706-sf3394176.patch
   msp430-gcc-4.5.3-20110706-sf3396639.patch
   msp430-gcc-4.5.3-20110706-sf3409864.patch
+  msp430-gcc-4.5.3-20110706-sf3417263.patch
   msp430-libc-20110612-sf3387164.patch
   msp430-libc-20110612-sf3402836.patch
   msp430mcu-20110613-sf3379189.patch
