@@ -1,3 +1,0 @@
-#!/usr/bin/env sh
-echo "Installing JNI libraries"
-/usr/bin/tos-install-jni
