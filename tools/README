@@ -1,12 +1,46 @@
-This directory contains the tinyos tools that are distributed in the
-tinyos-tools package, along with the spec files for all tinyos packages
-(the release directory). 
+This directory contains:
 
-To install the tinyos tools from CVS, you must first prepare the
-configure scripts here and in platforms/mica/uisp:
-  ./Bootstrap
+- the tinyos tools distributed in the tinyos-tools packages
+  (mig/ncc/ncg, motelist, tos-*, etc)
 
-Then you can configure, make and install as usual:
-  ./configure
-  make
-  make install
+- scripts to build local binaries and Debian packaged for the nesc
+  compiler and the AVR/MSP430/ARM/etc toolchains used by tinyos
+
+- RPM spec files (./release directory)
+
+
+How to build the tinyos-tools
+-----------------------------
+
+Local build in $TOSROOT/local:
+
+  ./build.sh build
+
+Build a Debian pacakge:
+
+  ./build.sh deb
+
+Clean up the tools directory:
+
+  ./build.sh clean
+
+NOTE: the clean only works if the repository is tracked using git and
+it will remove any untracked files and directories.
+
+
+How to build a toolchain (or other package)
+------------------------------------------
+
+Local build in $TOSROOT/local:
+
+  cd platforms/<arch>/toolchain
+  ./build.sh build
+
+Build a Debian pacakge:
+
+  cd platforms/<arch>/toolchain
+  ./build.sh build
+
+How find all the packages that can be build using ./build.sh scripts:
+
+  find . -name build.sh
