@@ -1,0 +1,8 @@
+Package: uisp-tinyos
+Version: @version@
+Section: devel
+Priority: optional
+Architecture: @architecture@
+Depends: libc6-dev|libc-dev
+Maintainer: Razvan Musaloiu-E. <razvan@musaloiu.com>
+Description: TinyOS-specific uisp (AVR In-System Programmer)

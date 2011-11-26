@@ -5,7 +5,6 @@ tinyos-tools package, along with the spec files for all tinyos packages
 To install the tinyos tools from CVS, you must first prepare the
 configure scripts here and in platforms/mica/uisp:
   ./Bootstrap
-  (cd platforms/mica/uisp;./bootstrap)
 
 Then you can configure, make and install as usual:
   ./configure

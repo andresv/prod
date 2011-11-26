@@ -51,7 +51,7 @@ MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure src/config-h.in \
 
 ACLOCAL              = aclocal --warnings=none -I $(auxdir)
 
-install_aux_files    = AUTHORS ChangeLog COPYING INSTALL CHANGES CHANGES.old \
+install_aux_files    = AUTHORS ChangeLog COPYING CHANGES CHANGES.old \
                        TODO
 
 DOC_INST_DIR         = $(DESTDIR)$(datadir)/doc/uisp-$(VERSION)
