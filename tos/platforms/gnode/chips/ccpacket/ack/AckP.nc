@@ -73,14 +73,8 @@ implementation {
 	message_t rxBuffer;		// for buffer swapping
 	message_t* buffer = &rxBuffer;	// current receive buffer
 	
-<<<<<<< HEAD
-	// ack messages are just headers and this buffer is only for sending,
-	// so we don't need space for a payload, footers and metadata
-	// NB: headers are right-aligned against the payload, so we need a full message_header_t, not just a chipcon_header_t!
-=======
 	// ack messages are just headers, but packet timestamping writes into the metadata fields,
 	// so we do need a full message_t
->>>>>>> 163e1b56c00d54efa3d26ed8a44332e0a59ad8c4
 	message_t ackBuffer;
 	message_t* ackMessage = &ackBuffer;
 	message_t* txMessage;	// the message being sent, either pending or awaiting an acknowledgement
@@ -282,12 +276,7 @@ implementation {
 		txMessage = msg;
 		
 		if (acking) {
-<<<<<<< HEAD
-			// we'll send it after the ack
-			// length field is not yet filled in, so lets do it here
-=======
 			// we'll send it after the ack, so remember the length
->>>>>>> 163e1b56c00d54efa3d26ed8a44332e0a59ad8c4
 			call ChipconPacket.setPayloadLength(txMessage, len);
 			return SUCCESS;
 		} else {
