@@ -174,6 +174,7 @@ const uint8_t chipconRegisterValues[NUM_REGISTERS * 2] = {
 	// Device address = 0
 	// GDO0 signal selection = (6) Asserts when sync word has been sent / received, and de-asserts at the end of the packet
 	// GDO2 signal selection = (9) CCA
+	FIFOTHR, 0x0E, // Bytes in TX FIFO: 5 (59 available spaces), Bytes in RX FIFO: 60.
 	FSCTRL1, _FSCTRL1, // Frequency synthesizer control.
 	FSCTRL0, 0x00, // Frequency synthesizer control.
 	FREQ2, _FREQ2, // Frequency control word, high byte.
@@ -205,14 +206,15 @@ const uint8_t chipconRegisterValues[NUM_REGISTERS * 2] = {
 	// use as CCA indicator
 	IOCFG2, 0x09, // GDO2 output pin configuration.
 	
-	// asserts when sync word has been sent / received, and de-asserts at the end of the packet
-	IOCFG0, 0x06, // GDO0 output pin configuration. Refer to SmartRF® Studio User Manual for detailed pseudo register explanation.
+	// asserts when RX FIFO is filled at or above the RX FIFO threshold. De-asserts when RX FIFO is drained below the same threshold.
+	// in TX mode 0x02 is used for TX FIFO
+	IOCFG0, 	0x00, // GDO0 output pin configuration. Refer to SmartRF® Studio User Manual for detailed pseudo register explanation.
 	
 	// CRC autoflush on, address checking on
 	// PKTCTRL1, 0x0F, // Packet automation control.
 	
-	// CRC autoflush on, address checking off
-	PKTCTRL1, 0x0C, // Packet automation control.
+	// CRC autoflush off (because autoflush works only with <= 64 byte packets), address checking off
+	PKTCTRL1, 	0x04, // Packet automation control.
 	
 	// data whitening on
 	PKTCTRL0, 0x45, // Packet automation control.

@@ -26,10 +26,11 @@
 #ifndef CHIPCON_REGISTERS_H
 #define CHIPCON_REGISTERS_H
 
-enum { NUM_REGISTERS = 36 };
+enum { NUM_REGISTERS = 37 };
 
 #ifndef __MSP430_HAS_CC1101__
 enum ChipconConfigRegisters {
+	FIFOTHR = 0x03,	// RX FIFO and TX FIFO Thresholds.
 	FSCTRL1 = 0x0B, // Frequency synthesizer control.
 	FSCTRL0 = 0x0C, // Frequency synthesizer control.
 	FREQ2 = 0x0D,   // Frequency control word, high byte.

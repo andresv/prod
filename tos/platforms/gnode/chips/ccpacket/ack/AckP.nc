@@ -184,6 +184,7 @@ implementation {
 					platform_printf("Ack: still couldn't ack: %d\n", error);
 					
 					// we're not busy so this must succeed
+					#warning Why you are so sure about it???? how do you know we are not busy
 					resendError = call SubSend.send(txMessage, call ChipconPacket.getPayloadLength(txMessage));
 					assertSuccess(resendError, ASSERT_CC_ACK_SEND);
 					subSending = TRUE;

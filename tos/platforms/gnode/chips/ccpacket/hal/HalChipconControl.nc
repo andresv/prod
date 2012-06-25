@@ -59,6 +59,11 @@ interface HalChipconControl {
 	command error_t tx();
 	
 	/**
+	 * Switch to RX mode
+	 */
+	command error_t rx();
+	
+	/**
 	 * Sync word has been sent or is about to be. Currently, this event
 	 * is generated just before writing the data to the FIFO. For accuracy,
 	 * it is very important not to do anything lengthy in the event handler!
@@ -128,12 +133,10 @@ interface HalChipconControl {
 	command void write(uint8_t* buffer, uint8_t length);
 	
 	/**
-	 * Read a packet and 2 status bytes from the RX FIFO into the buffer.
-	 * After emptying the FIFO, the radio returns to RX mode unless it is already transmitting.
+	 * Read a segment from the RX FIFO into the buffer.
 	 * @pre there is a packet in the RX FIFO
-	 * @pre packet is smaller than MAX_PACKET_LENGTH (should be enforced by the radio)
-	 * @return FAIL if the buffer contents were found invalid, SUCCESS otherwise
+	 * @return how bytes read from RX FIFO, if there was error 0xFF is returned
 	 */
-	command error_t read(uint8_t* buffer);
+	command uint8_t read(uint8_t* buffer, uint8_t packet_len, uint8_t bytes_received);
 	
 }

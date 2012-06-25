@@ -63,9 +63,8 @@ implementation {
 	// Application Note 038: Wake-On-Radio, and Design Note 505: RSSI Interpretation and Timing
 	enum Timings {
 		CALIBRATION_TIME = 721,	// additional time taken when calibrating during a state transition
-		OFF_TO_IDLE_TIME = 300,	// startup and stabilising the crystal
-		IDLE_TO_RXTX_TIME = 89,	// switching from idle mode to RX or TX (not including calibration)
 		RX_TO_TX_TIME = 10,			// switching from RX to TX
+
 	};
 	
 	// limit the amount of time we'll send a preamble to prevent a broken program jamming everyone
@@ -88,12 +87,19 @@ implementation {
 	};
 	
 	enum {
-		FIFO_SIZE = 64
+		FIFO_SIZE = 64,
+		AVAILABLE_BYTES_IN_TX_FIFO = 59 // check FIFOTHR register for clarification
 	};
 
 	// indicates if we are currently transmitting
 	bool transmitting = FALSE;
-	
+	// indicates if we are currently receiving
+	bool receiving = FALSE;
+
+	// if packet is longer than TXFIFO size, it counts how many bytes is waiting to be sent
+	uint8_t bytesToSend = 0;
+	uint8_t* txBuffer = NULL;
+
 	// number of end of packet events pending
 	uint8_t pending = 0;
 	
@@ -135,6 +141,7 @@ implementation {
 	 */
 	void waitForChipReady() {
 		// chip is ready when SO goes low
+		call BusyWait.wait(1); // delay, sometimes SO is not yet raised to fall down
 		while (call SO.get());
 	}
 	
@@ -178,7 +185,7 @@ implementation {
 		call CSn.set();
 		call CSn.clr();
 		call CSn.set();
-		call BusyWait.wait(40);
+		call BusyWait.wait(45);
 		call CSn.clr();
 		waitForChipReady();
 
@@ -222,6 +229,11 @@ implementation {
 	 * so the radio may not go to RX mode immediately.
 	 */
 	void listen() {
+		// Asserts when RX FIFO is filled at or above the RX FIFO threshold or the end of packet is reached.
+		// De-asserts when the RX FIFO is empty.
+		call HplChipconSpi.writeRegister(IOCFG0, 0x01);
+		call G0Interrupt.enableRisingEdge();
+
 		strobe(SRX);
 	}
 	
@@ -229,12 +241,28 @@ implementation {
 	 * Wait for either the CS (Carrier Senser) or CCA (Clear Channel Assessment) bits
 	 * to be set (which indicates the radio has a valid RSSI measurement).
 	 */
-	void waitForRssiValid() {
-		// Wait until either CS (bit 6) or CCA (bit 4) is asserted in PKTSTATUS,
-		// but drop out of the loop if we're no longer in RX, which can happen
-		// if (something that looks like) a packet is received while we wait.
-		uint8_t valid = (1 << 6) | (1 << 4);
-		while (!(readRegister(PKTSTATUS) & valid) && getChipState() == STATE_RX);
+	bool waitForRssiValid() {
+		uint8_t pktstatus;
+		while (1) {
+			pktstatus = readRegister(PKTSTATUS);
+
+			// sync word received
+			// if radio now tries to go to Tx mode (look .tx command), it thinks it is able to do that
+			// but actually it fail, status shows "calibrating", however it is because we just received a packet
+			// it is not because TX was just issued, so if sync word is received, try sending packet little bit later
+			if (pktstatus & (1<<3)) {
+				return FALSE;
+			}
+			// wait until either CS (bit 6) or CCA (bit 4) is asserted in PKTSTATUS
+			else if (pktstatus & ((1<<6) | (1<<4))) {
+				return TRUE;
+			}
+			// if CRC_OK is set it means we have just received a packet and should not go to Tx
+			// unless it is read out, otherwise it is deadlock because 0xA2 is always read
+			else if (pktstatus & (1<<7)) {
+				return FALSE;
+			}
+		}
 	}
 	
 	/**
@@ -247,6 +275,38 @@ implementation {
 		if (call SpiResource.isOwner()) {
 			writeRegister(ADDR, call ActiveMessageAddress.amAddress() & 0xFF);
 		}
+	}
+
+	/**
+	 * Update RX success or drop count
+	 */
+	inline void updateRxStatistics(bool success) {
+		if (success) {
+			status.rxCount++;
+		}
+		else {
+			status.dropCount++;
+		}
+	}
+
+	/**
+	 * Get RX FIFO status.
+	 * @return the RX FIFO status byte.
+	 */
+	inline uint8_t getRxFifoStatus() {
+		// 0:6 show bytes in RX FIFO
+		//   7 shows overflow
+
+		// check errata 1 for implementation details: http://www.ti.com/lit/er/swrz020b/swrz020b.pdf
+		uint8_t fifostatus, lastReading;
+
+		fifostatus = readRegister(RXBYTES);
+		do {
+			lastReading = fifostatus;
+			fifostatus = readRegister(RXBYTES);
+		} while (fifostatus < 2 && fifostatus != lastReading);
+
+		return fifostatus;
 	}
 
 	task void taskSetAddress() {
@@ -276,14 +336,8 @@ implementation {
 		dbg("HALRadio", "%s N%u: %s: txDone\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);
 
 		// verify we didn't interpret a received packet as a transmitted packet
-		// TODO: remove? No: it just happened! RXBYTES was read as 116.
-		// May be the "SPI Read Synchronization Issue" described here:
-		// http://focus.ti.com/lit/er/swrz020b/swrz020b.pdf
-		// for now, check the value twice if it is non-zero
-		// Update: still breaks, but it seems to have no adverse effect, so leave the assert disabled.
-		// assertEquals(readRegister(RXBYTES), 0, ASSERT_CC_HAL_TX_WAS_RX);
-		if (readRegister(RXBYTES) != 0) {
-			platform_printf("Hal: RX_BYTES = %u\n", readRegister(RXBYTES));
+		// if there are some bytes in RX FIFO flush them
+		if (getRxFifoStatus() != 0) {
 			strobe(SIDLE);
 			strobe(SFRX);
 			platform_printf("Hal: flush: RX_BYTES = %u\n", readRegister(RXBYTES));
@@ -314,89 +368,56 @@ implementation {
 	}
 	
 	/**
-	 * Packet received, address check failed or maximum length exceeded, CRC error, or RX FIFO overflowed.
+	 * Fills TX FIFO again to send next segment of the packet.
 	 */
-	task void rxDone() {
-		uint8_t state = getChipState();
-		uint8_t bytesInFifo;
-		bool overflow;
+	task void txNextSegment() {
+		uint8_t txbytes;
+		atomic txbytes = bytesToSend;
 
-		atomic {
-			assert(pending > 0, ASSERT_CC_HAL_NO_PENDING);
-			
-			// Not every end-of-packet interrupt results in an actual packet in the RX FIFO.
-			// Some conditions (failed address or length check) leave the radio in RX, in which case
-			// another interrupt can follow shortly, esp. at high data rates.
-			
-			// If we are still in RX, we can't reset pending to zero because another rxDone() may
-			// already have been posted (and would see pending == 0). Instead, decrement it.
-			if (state == STATE_RX) {
-				pending--;
-				
-				if (pending > 0) {
-					// ensure the the task runs once for each pending interrupt
-					// (a task can't be scheduled multiple times, so if the interrupt
-					// handler posts it as well, that's OK)
-					post rxDone();
-				}
-				
-				return;
-			}
-			
-			// If we are not in RX, we know we won't receive another packet until we have explicitly
-			// returned to RX, so we can (and should) safely reset pending to zero.
-			pending = 0;
+		if (txbytes <= AVAILABLE_BYTES_IN_TX_FIFO) {
+			call HplChipconSpi.write(TX_BURST_WRITE, txBuffer, txbytes);
+			txbytes = 0;
+			call CSn.set();
+			call CSn.clr();
+
+			// this must be here, right before changing interrupt behavior, because packet done interrupt comes immediately
+			// if radio is in UNDERFLOW state
+			atomic bytesToSend = txbytes;
+			// De-asserts at the end of the packet
+			call HplChipconSpi.writeRegister(IOCFG0, 0x06);
 		}
+		else {
+			call HplChipconSpi.write(TX_BURST_WRITE, txBuffer, AVAILABLE_BYTES_IN_TX_FIFO);
+			call CSn.set();
+			call CSn.clr();
 
-		// nothing to do if the radio is off
-		if (state == STATE_OFF) {
-			dbg("HALRadio", "%s N%u: %s: ERROR rxDone dropped packet, radio off\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);			
-			return;
+			txbytes -= AVAILABLE_BYTES_IN_TX_FIFO;
+			txBuffer += AVAILABLE_BYTES_IN_TX_FIFO;
+			atomic bytesToSend = txbytes;
 		}
+	}
 
-		// read the number of bytes in the FIFO
-		// RXFIFO_OVERFLOW is indicated by the top bit
-		bytesInFifo = readRegister(RXBYTES);
-		overflow = bytesInFifo & (1<<7);
-
-		if (overflow) {
-			// acknowledge the overflow
-			dbg("HALRadio", "%s N%u: %s: WARNING rxDone detected overflow\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);
-			strobe(SFRX);
-		}
-
-		// when a packet is dropped on the CRC, address or length check, the RX FIFO will be empty
-		// if we're still in RX, we didn't receive a complete packet (which has occurred, triggering assert (1) below)
-		if (overflow || bytesInFifo == 0 || state == STATE_RX) {
-			// radio will automatically resume receiving on a failed address or length check,
-			// but after a CRC error or overflow will it will be idle, so go to RX mode manually in that case
-			dbg("HALRadio", "%s N%u: %s: ERROR rxDone empty/overflow/ignored: dropped packet\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);
-			status.dropCount++;
-			if (state == STATE_IDLE || state == STATE_CALIBRATE || state == STATE_RXFIFO_OVERFLOW) listen();
-		} else {
-			// radio is now idle or calibrating, depending on AUTOCAL setting
-			uint32_t timestamp;
-			
-			assert(state == STATE_IDLE || state == STATE_CALIBRATE, ASSERT_CC_HAL_NOT_IDLE);
-			status.rxCount++;
-
-			// ReceiveP calling read() will put us back in RX
-			atomic timestamp = rxTimeStamp;
-			signal HalChipconControl.rxWaiting(timestamp);
-		}
+	task void rxWaiting() {
+		uint32_t timestamp;
+		atomic timestamp = rxTimeStamp;
+		signal HalChipconControl.rxWaiting(timestamp);
 	}
 	
 	/**
-	 * Set to trigger on the falling edge. G0 is configured as follows:
-	 * "Asserts when sync word has been sent / received, and de-asserts at the end of the packet. In RX, the pin will de-assert
-	 * when the optional address check fails or the RX FIFO overflows. In TX the pin will de-assert if the TX FIFO underflows."
+	 * Set to trigger on the falling edge in TX mode,
+	 * 		rising edge in RX mode to get FIFO almost full interrupt and falling edge to get packet received interrupt.
+	 * G0 is configured as follows:
+	 * TX: 0x02 De-asserts when the TX FIFO is below the same TX FIFO threshold - new bytes must be written soon to FIFO.
+	 * TX: 0x06 De-asserts at the end of the packet, last segment was sent.
+	 *
+	 * RX: 0x00 Asserts when RX FIFO is filled at or above the RX FIFO threshold. Start reading data out or else overflow occurs.
+	 * RX: 0x06 De-asserts at the end of the packet, last segment was received.
+	 *
 	 * So, this signals one of the following events:
-	 * - TX FIFO underflow
-	 * - RX FIFO overflow
+	 * - TX FIFO almost empty
+	 * - RX FIFO almost full
 	 * - packet sent
 	 * - packet received
-	 * - packet dropped on address check
-	 * - packet dropped on CRC error
 	 * - radio turned off or reset
 	 */
 	async event void G0Interrupt.fired() {
@@ -405,11 +426,17 @@ implementation {
 		uint32_t time = call LocalTime.get();
 		pending++;
 		if (transmitting) {
-			txTimeStamp = time;
-			post txDone();
+			if (bytesToSend == 0) {
+				txTimeStamp = time;
+				post txDone();
+			}
+			else {
+				post txNextSegment();
+			}
 		} else {
+			receiving = TRUE;
 			rxTimeStamp = time;
-			post rxDone();
+			post rxWaiting();
 		}
 	}
 	
@@ -462,7 +489,10 @@ implementation {
 		//dbg("HALRadio", "%s N%u: %s: INFO radio in sleep mode\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);
 
 		// enable the end of packet interrupt (a spurious event will be ignored since the radio is off)
-		call G0Interrupt.enableFallingEdge();
+		//call G0Interrupt.enableFallingEdge();
+
+		// enable the RXFIFO almost full interrupt (a spurious event will be ignored since the radio is off)
+		call G0Interrupt.enableRisingEdge();
 	}
 
 	/**
@@ -555,13 +585,17 @@ implementation {
 		
 		atomic {
 			// no pending interrupts - see if any tasks are pending
-			if (pending > 0) {
+			// or we get receive interrupt - it might take awhile to get the whole packet
+			if (pending > 0 || receiving) {
 				return EBUSY;
 			}
 			
 			// If a TX follows quickly after entering RX mode, the RSSI may not be valid yet.
 			// This may take about 100 us.
-			waitForRssiValid();
+			// Also it ensures that we are not missed Rx interrupt, although (pending > 0) should catch it
+			if (!waitForRssiValid()){
+				return EBUSY;
+			}
 			
 			// if G0 goes high now, TX-if-CCA will prevent us from switching
 			// attempt to switch to TX mode
@@ -570,36 +604,17 @@ implementation {
 			// wait and see if we actually made the transition
 			call BusyWait.wait(RX_TO_TX_TIME);
 			
-//			// check against STATE_RX instead of STATE_TX, just in case we're still in STATE_SETTLING or somesuch
-//			if (getChipState() == STATE_RX) {
-//				return FAIL;
-//			}
-//
-//			// set the flag - next interrupt indicates end of sent packet 
-//			transmitting = TRUE;
-			
-			switch (getChipState()) {
-				case STATE_RX:
-					// still in RX, so CCA prevented us from switching
-					return FAIL;
-				
-				case STATE_IDLE:
-				case STATE_CALIBRATE:
-				case STATE_RXFIFO_OVERFLOW:
-					// we received a packet just as we tried to switch
-					return EBUSY;
-				
-				case STATE_TX:
-				case STATE_SETTLING:
-					transmitting = TRUE;
-					break;
-				
-				default:
-					// OK, now I'm curious - which is it?
-					// compare to one we know it isn't so assertEquals will print it out
-					assertEquals(state, STATE_IDLE, ASSERT_CC_HAL_NO_TX);
-					return FAIL;
+			// check against STATE_RX instead of STATE_TX, just in case we're still in STATE_SETTLING or somesuch
+			if (getChipState() == STATE_RX) {
+				return FAIL;
 			}
+
+			// TX-if-CCA really changed state to TX
+			// falling edge is for TX FIFO almost empty interrupt or for packet sent interrupt
+			call G0Interrupt.enableFallingEdge();
+
+			// set the flag - next interrupt indicates end of sent whole packet or sent packet fragment
+			transmitting = TRUE;
 			
 			// set a timer to guard against losing the end-of-packet interrupt
 			if (call TxTimer.isRunning()) {
@@ -616,21 +631,49 @@ implementation {
 	/**
 	 * Write packet payload into the TX FIFO. If the buffer underflows, this will be detected
 	 * by the end-of-packet interrupt handler, which will signal txDone(ERETRY).
-	 * @pre length < FIFO_SIZE (64)
 	 */
 	command void HalChipconControl.write(uint8_t* buffer, uint8_t length) {
-		assert(length < FIFO_SIZE, ASSERT_CC_HAL_PACKET_TOO_LARGE);
+		uint8_t txBytes;
+		atomic txBytes = bytesToSend;
+		
 		assert(length == buffer[0] + 1, ASSERT_CC_HAL_INVALID_LENGTH);
+
+		if (length <= FIFO_SIZE) {
+			// GDO0 de-asserts (falling) at the end of the packet.
+			call HplChipconSpi.writeRegister(IOCFG0, 0x06);
+
+			// write the first byte to start transmitting the sync word
+			call HplChipconSpi.writeRegister(TXFIFO, buffer[0]);
 		
-		// write the first byte to start transmitting the sync word
-		call HplChipconSpi.writeRegister(TXFIFO, buffer[0]);
+			// timestamp the start of the packet
+			signal HalChipconControl.txStart(call LocalTime.get());
+
+			// data fits into TXFIFO, therefore it can be sent by just filling it once
+			call HplChipconSpi.write(TX_BURST_WRITE, buffer+1, length-1);
+			txBytes = 0;
+
+		}
+		else {
+			// GDO0 asserts when the TX FIFO is filled at or above the TX FIFO threshold.
+			// De-asserts when the TX FIFO is below the same threshold.
+			call HplChipconSpi.writeRegister(IOCFG0, 0x02);
+
+			// write the first byte to start transmitting the sync word
+			call HplChipconSpi.writeRegister(TXFIFO, buffer[0]);
 		
-		// timestamp the start of the packet
-		signal HalChipconControl.txStart(call LocalTime.get());
-		
-		// write data
-		call HplChipconSpi.write(TX_BURST_WRITE, buffer+1, length-1);
-		
+			// timestamp the start of the packet
+			signal HalChipconControl.txStart(call LocalTime.get());
+
+			// data does not fit, therefore TXFIFO must be filled couple of times
+			call HplChipconSpi.write(TX_BURST_WRITE, buffer+1, FIFO_SIZE-1); // we already transmitted length byte
+			txBytes = length - FIFO_SIZE;
+			txBuffer = buffer + FIFO_SIZE;
+
+			// TXFIFO is filled again in GDO0 interrupt
+		}
+
+		atomic bytesToSend = txBytes;
+
 		// end burst
 		call CSn.set();
 		call CSn.clr();
@@ -642,52 +685,119 @@ implementation {
 	}
 	
 	/**
-	 * Read a packet and 2 status bytes from the RX FIFO into the buffer.
-	 * After emptying the FIFO, the radio returns to RX mode.
-	 * @pre there is a packet in the RX FIFO
-	 * @pre packet is smaller than MAX_PACKET_LENGTH (should be enforced by the radio)
-	 * @return EINVALID if the buffer contents were found invalid or too short
+	 * Put radio back to listen mode.
+	 * @return SUCCESS
 	 */
-	command error_t HalChipconControl.read(uint8_t* buffer) {
-		uint8_t length;
-
-		uint8_t state = getChipState();
-		uint8_t bytesInFifo = readRegister(RXBYTES);
-		uint8_t overflow = bytesInFifo & (1<<7);
-		assert(state == STATE_IDLE || state == STATE_CALIBRATE, ASSERT_CC_HAL_NOT_IDLE);
-		
-		// read and check the length byte first (packet length, excluding the length byte itself and the footer)
-		length = call HplChipconSpi.readRegister(RXFIFO);
-		
-		// while we empty the buffer, the radio can start receiving again
-		listen();
-		
-		assertNot(overflow, ASSERT_CANT_HAPPEN);
-		
-		// these asserts do happen, especially the second
-		// maybe the buffer gets flushed due to a bad CRC before it is read?
-		// assert(length > 0, ASSERT_CC_HAL_RX_FIFO_EMPTY);
-		// assert(length + 2 <= bytesInFifo, ASSERT_CC_HAL_RX_FIFO_EMPTY);	// two status bytes
-		// assert(length + 1 <= MAX_PACKET_LENGTH, ASSERT_CC_HAL_PACKET_TOO_LARGE);	// length byte plus data
-		if (length == 0 || length + 2 > bytesInFifo || length + 1 > MAX_PACKET_LENGTH) {
-			// resolve the problem by flushing the buffer and restarting receive mode
-			platform_printf("HAL: length=%u, flushing buffer\n", length);
-			call CSn.set();
-			call CSn.clr();
+	command error_t HalChipconControl.rx() {
+		// there are some bytes in FIFO and/or overflow
+		atomic pending = 0;
+		if (getRxFifoStatus() != 0) {
 			strobe(SIDLE);
 			strobe(SFRX);
-			listen();
-			return FAIL;
 		}
 
-		// store the length and read the rest (including 2 status bytes)
-		buffer[0] = length;
-		call HplChipconSpi.read(RX_BURST_READ, &buffer[1], length + 2);
-
-		// end burst
-		call CSn.set();
-		call CSn.clr();
+		// we are in IDLE state after receiving
+		// so there can not be any receiving interrupt even while this atomic block is executed
+		atomic receiving = FALSE;
+		listen();
 		return SUCCESS;
+	}
+
+	/**
+	 * Read a segment from the RX FIFO into the buffer.
+	 * @pre there is data in the RX FIFO.
+	 * @return how many bytes were read from bufferm if there was error return 0xFF.
+	 */
+	command uint8_t HalChipconControl.read(uint8_t* buffer, uint8_t packet_len, uint8_t bytes_received) {
+		uint8_t bytesInFifo = getRxFifoStatus();
+
+		// NOTE: check errata 1 why 1 byte must be left in RX FIFO until packet is completely received:
+		// http://www.ti.com/lit/er/swrz020b/swrz020b.pdf
+
+		// wrong interrupt or spi error or RX FIFO overflow
+		if ((bytesInFifo & 0x7F) == 0 || (bytesInFifo & 0x7F) > 64 || (bytesInFifo & (1<<7))) {
+			return 0xFF;
+		}
+		else {
+			// we have first segment in FIFO (ReceiveP has not received anything yet, so it does not know packet_len yet)
+			// it knows about packet_len after this first segment is read out.
+			if (bytes_received == 0) {
+				uint8_t length = call HplChipconSpi.readRegister(RXFIFO);
+				buffer[0] = length;
+
+				if (length >= MAX_PACKET_LENGTH) {
+					return 0xFF;
+				}
+
+				// +3 is because of prepended len + appended CRC.
+				// 		It means this first length byte shows 3 bytes less that is actually received from radio altogether.
+				// TX appended real CRC, however now RX changed it to CRC status, LQI and RSSI if it was packet received interrupt,
+				// 		not FIFO almost full interrupt.
+				if (length + 3 > bytesInFifo) {
+					// there must be another interrupt coming, we do not have whole packet in FIFO
+					call HplChipconSpi.read(RX_BURST_READ, buffer+1, bytesInFifo-2); // -2 instead of -1 because of errata 1
+					call CSn.set();
+					call CSn.clr();
+
+					// packet end comes with the next interrupt
+					if (length + 3 - bytesInFifo-1 <= FIFO_SIZE) {
+						call G0Interrupt.enableFallingEdge();
+						call HplChipconSpi.writeRegister(IOCFG0, 0x06);
+					}
+					// packet end does not come with the next interrupt (RX FIFO should be read out couple of times)
+					else {
+						call HplChipconSpi.writeRegister(IOCFG0, 0x00);
+					}
+
+					// we left 1 byte in FIFO because of errata, those -1 here are every time because of that errata
+					// whole FIFO can be read out only if whole packet is received
+					return bytesInFifo - 1;
+				}
+				else {
+					// whole packet is in FIFO, read it out
+					call HplChipconSpi.read(RX_BURST_READ, buffer+1, bytesInFifo-1); // -1 because we already read out length byte from FIFO
+					call CSn.set();
+					call CSn.clr();
+
+					// check if CRC status shows CRC match
+					updateRxStatistics(*(buffer+bytesInFifo) & 0x80);
+
+					// ReceiveP changes radio into right state after receiving packet
+					return bytesInFifo; // we read out length and all other bytes from FIFO
+				}
+			}
+
+			// we have last segment in FIFO, after reading this out whole packet is received
+			else if (packet_len + 3 - bytes_received <= FIFO_SIZE) {
+				call HplChipconSpi.read(RX_BURST_READ, buffer, bytesInFifo);
+				call CSn.set();
+				call CSn.clr();
+				
+				// check if CRC status shows CRC match
+				updateRxStatistics(*(buffer+bytesInFifo) & 0x80);
+
+				return bytesInFifo;
+			}
+
+			else {
+				call HplChipconSpi.read(RX_BURST_READ, buffer, bytesInFifo-1);
+				call CSn.set();
+				call CSn.clr();
+
+				if (packet_len + 3 - bytes_received - bytesInFifo > FIFO_SIZE) {
+					// more than FIFO_SIZE is coming after that
+					// do assert if RXFIFO is almost full
+					call HplChipconSpi.writeRegister(IOCFG0, 0x00);
+				}
+				else {
+					// last segment is coming after that
+					// de assert with end of packet
+					call G0Interrupt.enableFallingEdge();
+					call HplChipconSpi.writeRegister(IOCFG0, 0x06);
+				}
+				return bytesInFifo-1;
+			}
+		}
 	}
 	
 	/**
@@ -787,11 +897,6 @@ implementation {
 		dbg("HALRadio", "%s N%u: %s: INFO TxTimer fired\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__);
 
 		atomic {
-			if (pending > 0) {
-				// the interrupt did fire
-				return;
-			}
-
 			dbg("HALRadio", "%s N%u: %s: ERROR TxTimer fired with pending %u\n", sim_time_string(), TOS_NODE_ID, __FUNCTION__, pending);
 
 			platform_printf("*** HAL: tx timeout!\n");

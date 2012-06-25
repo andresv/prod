@@ -262,6 +262,7 @@ implementation {
 	 */
 	event void HalChipconControl.rxWaiting(uint32_t timestamp) {
 		if (call BackoffTimer.isRunning()) {
+			#warning FIX IT: currently it can kick in in the middle of the packet
 			backoff(END_OF_PACKET_BACKOFF);
 		}
 	}
