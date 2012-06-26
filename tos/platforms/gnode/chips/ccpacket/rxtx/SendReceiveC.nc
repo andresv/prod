@@ -47,11 +47,12 @@ implementation {
 	SendP.PacketTimeStamp -> ChipconPacketC;
 	SendP.HalChipconControl -> HalChipconControlC;
 	
-	components ReceiveP;
+	components ReceiveP, new TimerMilliC() as RxTimeoutTimer;
 	ReceiveP.Packet -> ChipconPacketC;
 	ReceiveP.ChipconPacket -> ChipconPacketC;
 	ReceiveP.PacketTimeStamp -> ChipconPacketC;
 	ReceiveP.HalChipconControl -> HalChipconControlC;
+	ReceiveP.RxTimeoutTimer -> RxTimeoutTimer;
 	
 	components PowerP;
 	PowerP.HalChipconControl -> HalChipconControlC;
