@@ -1,13 +1,6 @@
-/* DO NOT MODIFY
- * This file cloned from Msp430UsciI2CB0P.nc for B2 */
 /*
- * Copyright (c) 2012 Eric B. Decker
- * Copyright (c) 2011 John Hopkins University
- * Copyright (c) 2011 Redslate Ltd.
- * Copyright (c) 2009-2010 People Power Co.
+ * Copyright (c) 2012, Eric B. Decker
  * All rights reserved.
- *
- * This open source code was developed with funding from People Power Company
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,47 +33,23 @@
  */
 
 /*
- * @author Peter Bigot    <pabigot@peoplepowerco.com>
- * @author Doug Carlson   <carlson@cs.jhu.edu>
- * @author Derek Baker    <derek@red-slate.com>
- * @author Eric B. Decker <cire831@gmail.com>
+ * Platform: low level platform interface.
  */
 
-configuration Msp430UsciI2CB2P {
-  provides {
-    interface I2CPacket<TI2CBasicAddr>[uint8_t client];
-    interface I2CReg[uint8_t client];
-    interface I2CSlave[uint8_t client];
-    interface ResourceConfigure[uint8_t client];
-    interface Msp430UsciError[uint8_t client];
-  }
-  uses {
-    interface Msp430UsciConfigure[ uint8_t client ];
-    interface HplMsp430GeneralIO as SCL;
-    interface HplMsp430GeneralIO as SDA;
-    interface Panic;
-    interface Platform;
-  }
-}
-implementation {
-  components Msp430UsciB2P as UsciP;
-  components new Msp430UsciI2CP() as I2CP;
+interface Platform {
+  /*
+   * platforms provide a low level usec timing element.
+   * usecsRaw returns a raw value for this timing element.
+   * This is used in low level time outs that are time based.
+   */
+  async command uint16_t usecsRaw();
 
-  I2CP.Usci -> UsciP;
-  I2CP.Interrupts -> UsciP.Interrupts[MSP430_USCI_I2C];
-  I2CP.ArbiterInfo -> UsciP;
-
-  Msp430UsciConfigure = I2CP;
-  ResourceConfigure = I2CP;
-  I2CPacket = I2CP;
-  I2CReg = I2CP;
-  I2CSlave = I2CP;
-  Msp430UsciError = I2CP;
-  Panic = I2CP;
-  Platform = I2CP;
-  SCL = I2CP.SCL;
-  SDA = I2CP.SDA;
-
-  components LocalTimeMilliC;
-  I2CP.LocalTime_bms -> LocalTimeMilliC;
+  /*
+   * platforms provide a longer term timing element.
+   *
+   * typically 32768 Hz (32 KiHz).  For lack of a better name
+   * call it jiffies.  Note.   Existing code calls these ticks
+   * jiffies already.
+   */
+  async command uint16_t jiffiesRaw();
 }
