@@ -187,6 +187,7 @@ interface HplMsp430UsciB {
 
   /* get bits of uctl1 in i2c mode */
   async command bool getStopBit();
+  async command bool getStartBit();
   async command bool getTransmitReceiveMode();
 
   /* h/w bits for controlling what to send next when master */
