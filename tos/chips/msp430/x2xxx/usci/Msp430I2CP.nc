@@ -63,6 +63,10 @@ generic module Msp430I2CP() {
 
 implementation {
   enum {
+    /* Due to different versions of msp430-gcc toolchain this value has 
+     * been incremented (200 in v.3.2.3, 800 in v.4.5.3), it is currently
+     * functional but this has to be addressed  */
+
     TIMEOUT = 1200,
   };
 
@@ -195,10 +199,10 @@ implementation {
   void nextRead() {
     uint16_t i=0;
 
-#ifdef notdef
-    /* this needs to be fixed.  software delay not so great */
-    for(i = 0xffff; i != 0;i--);	//software delay (aprox 25msec on z1)
-#endif
+    #ifdef USCI_X2XXX_DELAY
+     /* this needs to be fixed.  software delay not so great */
+     for(i = 0xffff; i != 0; i--) asm("nop"); //software delay (aprox 25msec on z1)
+    #endif
 
     m_buf[m_pos ++ ] = call UsciB.rx();
     if (m_pos == m_len-1){
@@ -225,10 +229,11 @@ implementation {
   void nextWrite() {
     uint16_t i = 0;
 
-#ifdef notdef
+    #ifdef USCI_X2XXX_DELAY
     /* this needs to get fixed. */
-    for (i = 0xffff; i != 0; i--);	//software delay (aprox 25msec on z1)
-#endif
+    for(i = 0xffff; i != 0; i--) asm("nop"); //software delay (aprox 25msec on z1)
+    #endif
+
     if ( ( m_pos == m_len) && ( m_flags & I2C_STOP ) ) {
       call UsciB.setTXStop();
       while(call UsciB.getStopBit()){
